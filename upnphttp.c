@@ -63,7 +63,6 @@
 #include <strings.h>
 #include <sys/stat.h>
 #include <sys/socket.h>
-#include <sys/resource.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -772,7 +771,7 @@ static void *serve_file(void *param)
     }
 
     const char *tmode;
-    if ((h->reqflags & FLAG_XFERBACKGROUND) && (setpriority(PRIO_PROCESS, 0, 19) == 0))
+    if (h->reqflags & FLAG_XFERBACKGROUND)
         tmode = "Background";
     else if (mime->type == M_IMAGE)
         tmode = "Interactive";
