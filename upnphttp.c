@@ -216,22 +216,38 @@ static void parse_http_header(struct upnphttp *h, char *name, char *value, int l
                       h->req_range_end ? (long long)h->req_range_end : -1);
         }
     }
-    // Be strict on host header to prevent DNS rebinding attacks
-    // host should be present and match listening interface
+    // Be strict on host header to prevent DNS rebinding attacks:
+    // host must match the interface IP (and port) the client connected to.
+    // expected_host[30]: IPv4 "255.255.255.255" (15) + ":" + port "65535" (5) + '\0'
+    // leaves room; 30 avoids a larger stack buffer while covering all valid cases.
     else if (strcasecmp(name, "Host") == 0)
     {
         char expected_host[30];
+        size_t expected_len;
 
         if (listening_port == 80)
+        {
             strxcpy(expected_host, get_interface_ip_str(h->iface), 30);
+            expected_len = strlen(expected_host);
+        }
         else
-            snprintf(expected_host, 30, "%s:%d", get_interface_ip_str(h->iface),
-                     listening_port);
+        {
+            expected_len = (size_t)snprintf(expected_host, 30, "%s:%d",
+                                           get_interface_ip_str(h->iface),
+                                           listening_port);
+        }
 
-        if (strncmp(expected_host, value, 30) == 0)
+        if (expected_len > 0 && expected_len < 30
+            && (size_t)len >= expected_len
+            && strncmp(expected_host, value, expected_len) == 0
+            && (len == (int)expected_len
+                || value[expected_len] == '\0' || value[expected_len] == '\r'
+                || value[expected_len] == '\n' || value[expected_len] == ' '
+                || value[expected_len] == '\t'))
             h->reqflags |= FLAG_HOST;
         else
-            PRINT_LOG(E_DEBUG, "Host heading mismatch: %s != %s\n", expected_host, value);
+            PRINT_LOG(E_DEBUG, "Host heading mismatch: %s != %.*s\n", expected_host,
+                      len > 0 ? len : 0, value);
     }
     else if (strcasecmp(name, "Transfer-Encoding") == 0)
     {
