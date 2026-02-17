@@ -6,10 +6,12 @@
 BINARY_NAME=microdlnad
 CONFIG_NAME=microdlna.conf
 SERVICE_NAME=microdlna.service
+MAN_NAME=microdlnad.8
 
 BIN_DIR=/usr/local/bin
 ETC_DIR=/usr/local/etc
 SYSTEMD_DIR=/etc/systemd/system
+MAN_DIR=/usr/local/share/man/man8
 
 if [ "$(id -u)" -ne 0 ]; then
     echo "This script must be run as root (e.g. sudo $0)." >&2
@@ -43,6 +45,12 @@ fi
 if [ -f "$ETC_DIR/$CONFIG_NAME" ]; then
     rm -f "$ETC_DIR/$CONFIG_NAME"
     echo "  -> removed $ETC_DIR/$CONFIG_NAME"
+fi
+
+# Remove man page
+if [ -f "$MAN_DIR/$MAN_NAME" ]; then
+    rm -f "$MAN_DIR/$MAN_NAME"
+    echo "  -> removed $MAN_DIR/$MAN_NAME"
 fi
 
 echo ""

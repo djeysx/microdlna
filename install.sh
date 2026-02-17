@@ -9,10 +9,12 @@ SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
 BINARY_NAME=microdlnad
 CONFIG_NAME=microdlna.conf
 SERVICE_NAME=microdlna.service
+MAN_NAME=microdlnad.8
 
 BIN_DIR=/usr/local/bin
 ETC_DIR=/usr/local/etc
 SYSTEMD_DIR=/etc/systemd/system
+MAN_DIR=/usr/local/share/man/man8
 
 if [ "$(id -u)" -ne 0 ]; then
     echo "This script must be run as root (e.g. sudo $0)." >&2
@@ -45,6 +47,15 @@ if [ ! -f "${SELF_DIR}/${SERVICE_NAME}" ]; then
 fi
 install -m 644 "${SELF_DIR}/${SERVICE_NAME}" "$SYSTEMD_DIR/${SERVICE_NAME}"
 echo "  -> $SYSTEMD_DIR/${SERVICE_NAME}"
+
+# Man page (built by Makefile from microdlna.pod)
+if [ ! -f "${SELF_DIR}/${MAN_NAME}" ]; then
+    echo "Man page ${MAN_NAME} not found in ${SELF_DIR}. Run 'make' first." >&2
+    exit 1
+fi
+mkdir -p "$MAN_DIR"
+install -m 644 "${SELF_DIR}/${MAN_NAME}" "$MAN_DIR/${MAN_NAME}"
+echo "  -> $MAN_DIR/${MAN_NAME}"
 
 systemctl daemon-reload
 systemctl enable "$SERVICE_NAME"
