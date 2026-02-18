@@ -56,6 +56,7 @@
  */
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -710,8 +711,7 @@ static void *serve_file(void *param)
     struct upnphttp *h = (struct upnphttp *)param;
     int sendfh = -1;
 
-    url_unescape(h->path);
-
+    // Path already unescaped in parser (process_upnphttp_http_query); no second unescape here.
     if (!sanitise_path(h->path))
     {
         PRINT_LOG(E_ERROR,
@@ -723,25 +723,34 @@ static void *serve_file(void *param)
 
     PRINT_LOG(E_DEBUG, "Serving DetailID: %s\n", h->path);
 
-    struct stat st;
-    if (stat(h->path, &st) != 0)
+    char fullpath[PATH_MAX];
+    if ((size_t)snprintf(fullpath, sizeof(fullpath), "%s/%s", media_dir, h->path) >= sizeof(fullpath))
     {
-        PRINT_LOG(E_ERROR, "Stat failed %s/%s\n", media_dir, h->path);
+        PRINT_LOG(E_ERROR, "Path too long: %s/%s\n", media_dir, h->path);
+        send_http_response(h, HTTP_PAGE_NOT_FOUND_404);
+        goto error;
+    }
+
+    struct stat st;
+    int stat_ret = stat(fullpath, &st);
+    if (stat_ret != 0)
+    {
+        PRINT_LOG(E_ERROR, "Stat failed %s\n", fullpath);
         send_http_response(h, HTTP_PAGE_NOT_FOUND_404);
         goto error;
     }
 
     if (!S_ISREG(st.st_mode))
     {
-        PRINT_LOG(E_ERROR, "Non-regular file: %s/%s\n", media_dir, h->path);
+        PRINT_LOG(E_ERROR, "Non-regular file: %s\n", fullpath);
         send_http_response(h, HTTP_FORBIDDEN_403);
         goto error;
     }
 
-    sendfh = open(h->path, O_RDONLY);
+    sendfh = open(fullpath, O_RDONLY);
     if (sendfh < 0)
     {
-        PRINT_LOG(E_ERROR, "Error opening %s/%s\n", media_dir, h->path);
+        PRINT_LOG(E_ERROR, "Error opening %s (errno=%d)\n", fullpath, errno);
         send_http_response(h, HTTP_PAGE_NOT_FOUND_404);
         goto error;
     }
@@ -877,8 +886,8 @@ static void *serve_file(void *param)
         // get what we need to run the file transfer
         FILE *fh = h->st->fh;
         int fd = h->fd;
-        int start = h->req_range_start;
-        int end = h->req_range_end;
+        off_t start = h->req_range_start;
+        off_t end = h->req_range_end;
 
         // deallocate everything else, taking care not to close the file handle
         free(h->st);

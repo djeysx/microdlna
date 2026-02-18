@@ -82,6 +82,10 @@ static inline int sys_sendfile(int sock, int sendfd, off_t *offset, off_t len)
 
 
 
+/* Skip sendfile for transfers larger than 2GB; use read/write to avoid
+ * kernel/fs issues (e.g. sendfile returning 0 or -1 with large count). */
+#define SENDFILE_MAX_TRANSFER ((off_t)2147483647)
+
 void send_file(int socketfd, int sendfd, off_t offset, off_t end_offset)
 {
     off_t send_size;
@@ -89,8 +93,9 @@ void send_file(int socketfd, int sendfd, off_t offset, off_t end_offset)
 
 #if defined(HAVE_SYS_SENDFILE)
     static int try_sendfile = 1;
+    off_t total = end_offset - offset + 1;
 
-    if (try_sendfile)
+    if (try_sendfile && total <= SENDFILE_MAX_TRANSFER)
     {
         while (offset <= end_offset)
         {
@@ -103,16 +108,19 @@ void send_file(int socketfd, int sendfd, off_t offset, off_t end_offset)
             ret = sys_sendfile(socketfd, sendfd, &offset, (size_t)send_size);
             if (ret == -1)
             {
-                // a broken pipe isn't really an error
+                /* Client closed connection */
                 if (errno == EPIPE)
                     break;
 
                 PRINT_LOG(E_DEBUG, "sendfile error :: error no. %d\n", errno);
-                /* If sendfile isn't supported on the filesystem, don't bother trying to use it again. */
-                if (errno == EOVERFLOW || errno == EINVAL)
-                    goto fallback;
-                else if (errno != EAGAIN)
-                    break;
+                /* Fall back to read/write on any sendfile error. */
+                goto fallback;
+            }
+            if (ret == 0)
+            {
+                /* No progress (e.g. socket buffer full or kernel quirk). Avoid infinite loop. */
+                PRINT_LOG(E_DEBUG, "sendfile returned 0, falling back to read/write\n");
+                goto fallback;
             }
         }
         return;
