@@ -46,10 +46,10 @@
 #include "version.h"
 
 /* Manufacturer */
-#define ROOTDEV_MANUFACTURER "Michael J. Walsh"
+#define ROOTDEV_MANUFACTURER "Djeysx"
 
 /* Manufacturer URL */
-#define ROOTDEV_MANUFACTURERURL "https://github.com/mjfwalsh/microdlna"
+#define ROOTDEV_MANUFACTURERURL "https://github.com/djeysx/microdlna"
 
 /* Model description */
 #define ROOTDEV_MODELDESCRIPTION "MicroDLNA"
