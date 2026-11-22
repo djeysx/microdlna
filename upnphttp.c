@@ -648,28 +648,28 @@ static void send_resp_icon(struct upnphttp *h)
     {
         PRINT_LOG(E_DEBUG, "Sending small PNG icon\n");
         data = (char *)png_sm;
-        size = sizeof(png_sm) - 1;
+        size = sizeof(png_sm);
         mime.sub_type = "png";
     }
     else if (strcmp(h->path, "lrg.png") == 0)
     {
         PRINT_LOG(E_DEBUG, "Sending large PNG icon\n");
         data = (char *)png_lrg;
-        size = sizeof(png_lrg) - 1;
+        size = sizeof(png_lrg);
         mime.sub_type = "png";
     }
     else if (strcmp(h->path, "sm.jpg") == 0)
     {
         PRINT_LOG(E_DEBUG, "Sending small JPEG icon\n");
         data = (char *)jpeg_sm;
-        size = sizeof(jpeg_sm) - 1;
+        size = sizeof(jpeg_sm);
         mime.sub_type = "jpeg";
     }
     else if (strcmp(h->path, "lrg.jpg") == 0)
     {
         PRINT_LOG(E_DEBUG, "Sending large JPEG icon\n");
         data = (char *)jpeg_lrg;
-        size = sizeof(jpeg_lrg) - 1;
+        size = sizeof(jpeg_lrg);
         mime.sub_type = "jpeg";
     }
     else
