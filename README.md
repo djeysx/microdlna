@@ -42,6 +42,8 @@ Other topics:
 - Reworked config file (`microdlna.conf`), notably for Raspberry Pi media
   paths.
 - Added `install.sh`/`uninstall.sh` scripts and the systemd unit.
+- Added icon choice: import a custom image and select it at build time
+  (`make ICON=<name>`), see `docs/Icons.md`.
 
 ## Compile 
 
