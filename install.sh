@@ -6,6 +6,7 @@
 set -e
 
 SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
+BUILD_DIR="${SELF_DIR}/build"
 BINARY_NAME=microdlnad
 CONFIG_NAME=microdlna.conf
 SERVICE_NAME=microdlna.service
@@ -21,15 +22,15 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
-if [ ! -f "${SELF_DIR}/${BINARY_NAME}" ]; then
-    echo "Binary ${BINARY_NAME} not found in ${SELF_DIR}. Run 'make' first." >&2
+if [ ! -f "${BUILD_DIR}/${BINARY_NAME}" ]; then
+    echo "Binary ${BINARY_NAME} not found in ${BUILD_DIR}. Run 'make' first." >&2
     exit 1
 fi
 
 echo "Installing MicroDLNA..."
 
 mkdir -p "$BIN_DIR"
-install -m 755 "${SELF_DIR}/${BINARY_NAME}" "$BIN_DIR/${BINARY_NAME}"
+install -m 755 "${BUILD_DIR}/${BINARY_NAME}" "$BIN_DIR/${BINARY_NAME}"
 strip "$BIN_DIR/${BINARY_NAME}" 2>/dev/null || true
 echo "  -> $BIN_DIR/${BINARY_NAME}"
 
@@ -49,12 +50,12 @@ install -m 644 "${SELF_DIR}/${SERVICE_NAME}" "$SYSTEMD_DIR/${SERVICE_NAME}"
 echo "  -> $SYSTEMD_DIR/${SERVICE_NAME}"
 
 # Man page (built by Makefile from microdlna.pod)
-if [ ! -f "${SELF_DIR}/${MAN_NAME}" ]; then
-    echo "Man page ${MAN_NAME} not found in ${SELF_DIR}. Run 'make' first." >&2
+if [ ! -f "${BUILD_DIR}/${MAN_NAME}" ]; then
+    echo "Man page ${MAN_NAME} not found in ${BUILD_DIR}. Run 'make' first." >&2
     exit 1
 fi
 mkdir -p "$MAN_DIR"
-install -m 644 "${SELF_DIR}/${MAN_NAME}" "$MAN_DIR/${MAN_NAME}"
+install -m 644 "${BUILD_DIR}/${MAN_NAME}" "$MAN_DIR/${MAN_NAME}"
 echo "  -> $MAN_DIR/${MAN_NAME}"
 
 systemctl daemon-reload

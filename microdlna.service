@@ -19,7 +19,7 @@ NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=/home/pi
+ReadWritePaths=/tmp
 ReadOnlyPaths=/
 
 # Allow binding to privileged ports if needed (remove if port >= 1024)

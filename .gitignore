@@ -1,6 +1,3 @@
 Makefile
-microdlnad
-microdlnad.8
-version_info.h
-*.o
+build/
 .*
