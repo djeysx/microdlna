@@ -144,4 +144,63 @@ test: check
 
 -include \$(wildcard \$(TEST_OBJ_DIR)/*.d)
 
+# ---- functional tests -----------------------------------------------------
+# tests/functional/ftest_*.c drive a *real*, separately-running microdlnad
+# process over real sockets (HTTP/SOAP over TCP, SSDP over UDP) -- see
+# tests/functional/support/ and docs/dev/FUNCTIONAL_TESTS.md. Unlike the
+# unit tests above, these binaries never link any of microdlna's own .o
+# files; they only need the production binary built and spawned as a
+# child process (tests/functional/support/process.c). Kept as a separate
+# "make check-functional" target (not a dependency of check/test) since it
+# is much slower: real process spawns, real socket round-trips.
+FTEST_DIR := tests/functional
+FTEST_OBJ_DIR := \$(BUILD_DIR)/tests/functional/obj
+FTEST_BIN_DIR := \$(BUILD_DIR)/tests/functional/bin
+FTEST_SAN_BIN_DIR := \$(BUILD_DIR)/tests/functional/sanitized
+
+FTEST_SRCS := \$(wildcard \$(FTEST_DIR)/ftest_*.c)
+FTEST_BINS := \$(patsubst \$(FTEST_DIR)/ftest_%.c,\$(FTEST_BIN_DIR)/ftest_%,\$(FTEST_SRCS))
+FTEST_SUPPORT_SRCS := \$(wildcard \$(FTEST_DIR)/support/*.c)
+# support_test_main.o is the exact same object the unit tests above build
+# (tests/support/test_main.c has no unit-test-specific logic -- just
+# TEST()/registration/running/filtering) -- reused here via its existing
+# pattern rule rather than recompiled a second time.
+FTEST_SUPPORT_OBJS := \$(TEST_OBJ_DIR)/support_test_main.o \\
+                      \$(patsubst \$(FTEST_DIR)/support/%.c,\$(FTEST_OBJ_DIR)/fsupport_%.o,\$(FTEST_SUPPORT_SRCS))
+
+FTEST_SAN := -fsanitize=address,undefined -fno-omit-frame-pointer
+FTEST_CFLAGS := \$(BASE_CFLAGS) -g -O0 \$(FTEST_SAN)
+FTEST_LDFLAGS := -pthread \$(FTEST_SAN)
+
+\$(FTEST_OBJ_DIR) \$(FTEST_BIN_DIR):
+${tab}mkdir -p \$@
+
+\$(FTEST_OBJ_DIR)/fsupport_%.o: \$(FTEST_DIR)/support/%.c | \$(FTEST_OBJ_DIR)
+${tab}\$(CC) -c \$(FTEST_CFLAGS) -MMD -MP \$< -o \$@
+
+\$(FTEST_OBJ_DIR)/ftest_%.o: \$(FTEST_DIR)/ftest_%.c | \$(FTEST_OBJ_DIR)
+${tab}\$(CC) -c \$(FTEST_CFLAGS) -MMD -MP \$< -o \$@
+
+\$(FTEST_BIN_DIR)/ftest_%: \$(FTEST_OBJ_DIR)/ftest_%.o \$(FTEST_SUPPORT_OBJS) | \$(FTEST_BIN_DIR)
+${tab}\$(CC) \$(FTEST_CFLAGS) -o \$@ \$(FTEST_OBJ_DIR)/ftest_\$*.o \$(FTEST_SUPPORT_OBJS) \$(FTEST_LDFLAGS)
+
+# check-functional runs the ftest_* binaries against a *separate*,
+# ASan/UBSan-instrumented build of microdlnad, in its own build directory
+# so it never touches \$(BUILD_DIR)/microdlnad -- this is what lets live
+# traffic through these tests catch the same class of bug the unit tests
+# already catch per translation unit (see docs/dev/TESTS.md).
+.PHONY: check-functional
+check-functional: \$(FTEST_BINS)
+${tab}\$(MAKE) BUILD_DIR=\$(FTEST_SAN_BIN_DIR) \\
+${tab}  CFLAGS_DEV="\$(CFLAGS_DEV) \$(FTEST_SAN)" LDFLAGS_DEV="\$(LDFLAGS_DEV) \$(FTEST_SAN)" \\
+${tab}  \$(FTEST_SAN_BIN_DIR)/microdlnad
+${tab}@fail=0; for t in \$(FTEST_BINS); do \\
+${tab}    printf '== %s\\n' "\$\$t"; \\
+${tab}    MICRODLNAD_BIN=\$(FTEST_SAN_BIN_DIR)/microdlnad "\$\$t" || fail=1; \\
+${tab}  done; \\
+${tab}  if [ \$\$fail -ne 0 ]; then echo 'FUNCTIONAL TESTS FAILED'; exit 1; fi; \\
+${tab}  echo 'ALL FUNCTIONAL TESTS PASSED'
+
+-include \$(wildcard \$(FTEST_OBJ_DIR)/*.d)
+
 MAKEFILE

@@ -698,7 +698,7 @@ int main(int argc, char *const *argv)
             // reject connections from unknown interfaces
             int iface = -1;
 
-            if (clientname.sin_addr.s_addr != INADDR_LOOPBACK)
+            if (clientname.sin_addr.s_addr != htonl(INADDR_LOOPBACK))
             {
                 iface = get_interface(&clientname.sin_addr);
                 if (iface == -1)

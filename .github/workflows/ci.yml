@@ -25,3 +25,13 @@ jobs:
           make clean
           ./configure.sh
           make check
+
+  functional-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Functional tests
+        run: |
+          ./configure.sh
+          make check-functional
