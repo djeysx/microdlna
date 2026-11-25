@@ -271,8 +271,9 @@ const char *mime_type_to_text(enum MimeType main_type)
 struct ext_info *get_mime_type(const char *filename)
 {
     int len = strlen(filename);
+    int end = len > 6 ? len - 6 : 0;
 
-    for (int i = len - 1; i > len - 7; i--)
+    for (int i = len - 1; i >= end; i--)
         if (filename[i] == '.')
             return get_mime_type_from_ext(filename + i + 1);
 

@@ -31,8 +31,10 @@ extern int max_connections;     /* max number of simultaneous conenctions */
 
 extern int mode_systemd;        /* systemd-compatible mode or not */
 
-extern char friendly_name[];    /* hostname or user preference */
+#define FRIENDLYNAME_MAX_LEN 64
+extern char friendly_name[FRIENDLYNAME_MAX_LEN]; /* hostname or user preference */
 
 extern char *media_dir;         /* path to the media directory */
 
-extern char uuidvalue[];        /* uuid identifier, includes uuid: prefix */
+#define UUID_LEN 42
+extern char uuidvalue[UUID_LEN]; /* uuid identifier, includes uuid: prefix */

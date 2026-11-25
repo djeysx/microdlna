@@ -216,7 +216,10 @@ int validate_uuid(const char *s)
 
         for (int j = 0; j < lens[i]; j++, s++)
         {
-            if (*s != '\0' && (*s < 'A' || *s > 'F') && (*s < 'a' || *s > 'f')
+            if (*s == '\0')
+                return 0;
+
+            if ((*s < 'A' || *s > 'F') && (*s < 'a' || *s > 'f')
                 && (*s < '0' || *s > '9'))
                 return 0;
         }

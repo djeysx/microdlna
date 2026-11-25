@@ -182,7 +182,13 @@ content_entry **get_directory_listing(struct upnphttp *h, unsigned int *file_cou
         for (int i = 0; i < h->requested_count; i++)
             entries[i] = entries[i + h->starting_index];
 
-    safe_realloc((void **)&entries, (unsigned)h->requested_count * sizeof(content_entry *));
+    // realloc(ptr, 0) is allowed to return NULL (it does under glibc), which
+    // would make a valid-but-empty result indistinguishable from the error
+    // paths above to callers that just check for NULL; keep at least one
+    // slot allocated, as the *file_count == 0 case above already does.
+    unsigned int final_count = (unsigned)h->requested_count;
+    safe_realloc((void **)&entries,
+                 (final_count > 0 ? final_count : 1) * sizeof(content_entry *));
 
     return entries;
 }

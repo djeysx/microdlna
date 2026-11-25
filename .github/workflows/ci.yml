@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build (dev)
+        run: |
+          ./configure.sh
+          make
+
+      - name: Build (release)
+        run: |
+          make clean
+          make BUILD=release
+
+      - name: Unit tests
+        run: |
+          make clean
+          ./configure.sh
+          make check

@@ -86,4 +86,62 @@ ${tab}strip /usr/local/bin/microdlnad
 ${tab}mkdir -p /usr/local/share/man/man8
 ${tab}cp \$(BUILD_DIR)/microdlnad.8 /usr/local/share/man/man8
 
+# ---- tests --------------------------------------------------------------
+# tests/test_<module>.c "#include"s ../<module>.c to reach its static
+# functions, so <module>.o is excluded from that binary's link (see
+# tests/support/ and docs/dev/TESTS.md). microdlna.o is never linked into a
+# test binary (it holds main() and the production globals, stubbed in
+# tests/support/stubs.c). ASan/UBSan/LeakSanitizer are always on for tests;
+# they never affect the production binary built by \$(BUILD_DIR)/microdlnad.
+TEST_DIR := tests
+TEST_OBJ_DIR := \$(BUILD_DIR)/tests/obj
+TEST_BIN_DIR := \$(BUILD_DIR)/tests/bin
+
+TEST_SRCS := \$(wildcard \$(TEST_DIR)/test_*.c)
+TEST_BINS := \$(patsubst \$(TEST_DIR)/test_%.c,\$(TEST_BIN_DIR)/test_%,\$(TEST_SRCS))
+TEST_SUPPORT_OBJS := \$(TEST_OBJ_DIR)/support_test_main.o \\
+                     \$(TEST_OBJ_DIR)/support_stubs.o \\
+                     \$(TEST_OBJ_DIR)/support_helpers.o
+TEST_MODULE_OBJS := \$(patsubst \$(BUILD_DIR)/%.o,\$(TEST_OBJ_DIR)/%.o,\\
+                      \$(filter-out \$(BUILD_DIR)/microdlna.o,\$(filter %.o,\$(DST))))
+
+TEST_SAN := -fsanitize=address,undefined -fno-omit-frame-pointer
+TEST_CFLAGS := \$(BASE_CFLAGS) -g -O0 -I. -I\$(TEST_DIR)/support \$(TEST_SAN)
+TEST_LDFLAGS := -pthread \$(TEST_SAN)
+
+\$(TEST_OBJ_DIR) \$(TEST_BIN_DIR):
+${tab}mkdir -p \$@
+
+# Without this, make treats test .o files as disposable "intermediate"
+# files (built only to satisfy a pattern-rule chain) and deletes them right
+# after linking each test binary, forcing a full rebuild on every "make
+# check". .SECONDARY with no prerequisites disables that for every file.
+.SECONDARY:
+
+\$(TEST_OBJ_DIR)/%.o: %.c | \$(TEST_OBJ_DIR)
+${tab}\$(CC) -c \$(TEST_CFLAGS) -MMD -MP \$< -o \$@
+
+\$(TEST_OBJ_DIR)/support_%.o: \$(TEST_DIR)/support/%.c | \$(TEST_OBJ_DIR)
+${tab}\$(CC) -c \$(TEST_CFLAGS) -MMD -MP \$< -o \$@
+
+\$(TEST_OBJ_DIR)/test_%.o: \$(TEST_DIR)/test_%.c | \$(TEST_OBJ_DIR)
+${tab}\$(CC) -c \$(TEST_CFLAGS) -MMD -MP \$< -o \$@
+
+\$(TEST_BIN_DIR)/test_%: \$(TEST_OBJ_DIR)/test_%.o \$(TEST_SUPPORT_OBJS) \\
+                        \$(TEST_MODULE_OBJS) | \$(TEST_BIN_DIR)
+${tab}\$(CC) \$(TEST_CFLAGS) -o \$@ \$(TEST_OBJ_DIR)/test_\$*.o \$(TEST_SUPPORT_OBJS) \\
+${tab}  \$(filter-out \$(TEST_OBJ_DIR)/\$*.o,\$(TEST_MODULE_OBJS)) \$(TEST_LDFLAGS)
+
+.PHONY: check test
+check: \$(TEST_BINS)
+${tab}@fail=0; for t in \$(TEST_BINS); do \\
+${tab}    printf '== %s\\n' "\$\$t"; "\$\$t" || fail=1; \\
+${tab}  done; \\
+${tab}  if [ \$\$fail -ne 0 ]; then echo 'TESTS FAILED'; exit 1; fi; \\
+${tab}  echo 'ALL TESTS PASSED'
+
+test: check
+
+-include \$(wildcard \$(TEST_OBJ_DIR)/*.d)
+
 MAKEFILE

@@ -89,10 +89,8 @@ int mode_systemd = 0;           /* systemd-compatible mode or not */
 
 char *media_dir = NULL;
 
-#define FRIENDLYNAME_MAX_LEN 64
 char friendly_name[FRIENDLYNAME_MAX_LEN] = { '\0' };
 
-#define UUID_LEN 42
 char uuidvalue[UUID_LEN] = { '\0' };
 
 // var local to this file

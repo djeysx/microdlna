@@ -58,11 +58,17 @@ microdlna/
 │   ├── threads.c/h    # create_thread, max_connections, pthread detach
 │   └── log.c/h        # Niveaux de log, sortie fichier/console
 │
+├── Tests unitaires
+│   └── tests/
+│       ├── support/       # harness maison (TEST(), assertions, stubs, helpers)
+│       └── test_*.c       # un fichier par module testé (voir docs/dev/TESTS.md)
+│
 └── Documentation / déploiement
     ├── microdlna.pod  # Source de la page man
     └── docs/
         ├── SPEC_FONCTIONNELLE.md
-        └── ARCHITECTURE.md
+        ├── ARCHITECTURE.md
+        └── dev/TESTS.md
 ```
 
 ---
