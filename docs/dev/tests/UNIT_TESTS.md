@@ -3,7 +3,7 @@
 ## Lancer les tests
 
 ```sh
-./configure.sh && make      # build de production, inchangé
+make                        # build de production, inchangé
 make check                  # compile et lance tous les tests unitaires
 ```
 
@@ -38,7 +38,7 @@ tests/
 Un binaire est produit par fichier `tests/test_*.c`, dans
 `build/tests/bin/`. La liste des modules testés est découverte par
 `$(wildcard tests/test_*.c)` : **ajouter un fichier de test ne nécessite pas
-de relancer `./configure.sh`**, seulement `make check`.
+de modifier le `Makefile`**, seulement de relancer `make check`.
 
 ## Convention : accéder aux fonctions `static`
 
@@ -55,7 +55,7 @@ fichier `tests/test_<module>.c` fait :
 Le fichier de test devient alors le même translation unit que le module, et
 a accès à tout. En contrepartie, le `<module>.o` de production est **exclu
 du link** de ce binaire de test (sinon : symboles dupliqués) — c'est fait
-automatiquement par la règle de link dans le `Makefile` généré, basée sur le
+automatiquement par la règle de link dans le `Makefile`, basée sur le
 nom du fichier de test. **Zéro ligne modifiée dans le code de production.**
 
 Exemple concret (`tests/test_mime.c`) :

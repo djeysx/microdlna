@@ -88,14 +88,12 @@ safe, and fixed every production bug they turned up:
 
 ## Compile 
 
-    ./configure.sh
     make
 
 ### Compile Release
 
 Compile with more optimisations and stripping
 
-    ./configure.sh
     make BUILD=release
 
 ## Tests
@@ -109,7 +107,6 @@ the second kind. None of them affect the `microdlnad` binary built by
 Link individual `.c` modules directly (no process spawned, no sockets), with
 AddressSanitizer/UndefinedBehaviorSanitizer/LeakSanitizer always on:
 
-    ./configure.sh
     make check
 
 `make check` (alias: `make test`) compiles and runs every test under
@@ -121,7 +118,6 @@ Spawn the real `microdlnad` binary as a separate process and talk to it over
 real sockets (HTTP/SOAP over TCP, SSDP over UDP on the loopback interface),
 under AddressSanitizer/UndefinedBehaviorSanitizer:
 
-    ./configure.sh
     make check-functional
 
 Run the same functional test suite against a build compiled with

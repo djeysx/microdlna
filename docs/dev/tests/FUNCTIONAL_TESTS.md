@@ -11,7 +11,7 @@ conditions de trafic réel.
 ## Lancer les tests
 
 ```sh
-./configure.sh && make check-functional        # serveur sous ASan/UBSan
+make check-functional                            # serveur sous ASan/UBSan
 make check-functional-tsan                       # serveur sous ThreadSanitizer
 ```
 

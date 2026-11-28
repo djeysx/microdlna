@@ -28,8 +28,7 @@ microdlna/
 ├── microdlna.c        # Point d’entrée, boucle principale, options, signaux
 ├── microdlna.conf     # Exemple de fichier de configuration
 ├── globalvars.h       # Variables globales (port, UUID, media_dir, etc.)
-├── configure.sh       # Génération du Makefile
-├── Makefile           # Généré par configure.sh
+├── Makefile           # Build et tests
 ├── gen_version.sh     # Génération version_info.h
 ├── version.c / version.h
 │
@@ -182,7 +181,7 @@ Il n’y a **pas de modèle persistant** : pas de base SQLite ni de cache en mé
 - **Définitions** : `_GNU_SOURCE`, `_LARGEFILE_SOURCE`, `_FILE_OFFSET_BITS=64`.
 - **Bibliothèques** : pthread (link `-pthread`).
 - **Système** : sockets BSD, `select()`, `sendfile()` (Linux ; sinon émulation read/write), `realpath`, `getpwnam`, `getpwuid`, `dirent`, `stat`/`fstatat`, etc.
-- **Génération du Makefile** : `configure.sh` (liste des `.c`, génération des dépendances via `$(CC) -MM`).
+- **Build** : GNU make (liste des `.c` via `$(wildcard)`, dépendances d’en-têtes via `-MMD -MP`).
 - **Page man** : `pod2man` pour générer `microdlnad.8` à partir de `microdlna.pod`.
 
 ---

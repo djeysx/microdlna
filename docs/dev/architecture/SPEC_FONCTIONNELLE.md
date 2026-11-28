@@ -171,7 +171,7 @@ Les fichiers dont l’extension n’est pas reconnue sont **ignorés** dans le l
 - **Pas de cache** : chaque Browse lit le système de fichiers à la demande.
 - **Pas de transcodage** : les clients doivent accepter les formats natifs.
 - **Threads** : une connexion HTTP par requête (thread dédié pour le transfert de fichier), plafonnée par `max_connections`.
-- **Build** : C11, pthreads, compilation via `configure.sh` + `make` (pas de dépendances externes au-delà de la libc et des headers POSIX/Linux).
+- **Build** : C11, pthreads, compilation via GNU `make` (pas de dépendances externes au-delà de la libc et des headers POSIX/Linux).
 
 ---
 
