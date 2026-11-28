@@ -1,15 +1,75 @@
-# Microdlna
+# MicroDLNA
 
-This is a fork of microdlna which is itself a fork a minidlna.
+[![CI](https://github.com/djeysx/microdlna/actions/workflows/ci.yml/badge.svg)](https://github.com/djeysx/microdlna/actions/workflows/ci.yml)
+[![License: GPL v2](https://img.shields.io/badge/license-GPLv2-blue.svg)](COPYING)
 
-Microdlna is a stateless dlna server with no external dependencies with an emphasis on
-low memory usage.
+A lightweight, stateless DLNA media server written in C. Point it at a folder and
+watch your videos on your TV, with no database to build and nothing to scan.
 
-It has **no database**, which means no long, resource-consuming scan: changes made
-on the server (new, moved or removed files) are exposed immediately. As a
-trade-off, it also has no search capabilities, sorting, thumbnails, or format
-conversion, but it can cope with the media directory not existing at start
-time.
+## Features
+
+- **No database, no scan:** new, moved or removed files show up immediately.
+- **No external dependencies**, with an emphasis on low memory usage.
+- **Tolerant at startup:** it waits for the network to come up, and the media
+  directory does not need to exist yet.
+- **Ready to run as a service:** systemd unit and install scripts included.
+- **Custom device icon**, chosen at build time.
+
+## Limitations
+
+By design, MicroDLNA has:
+
+- no search and no custom sorting,
+- no thumbnails,
+- no format conversion: your player must support the files as they are,
+- no IPv6.
+
+## Quick start
+
+On Linux, with a C compiler, `make`, `git` and `pod2man` installed:
+
+```sh
+git clone https://github.com/djeysx/microdlna.git
+cd microdlna
+make BUILD=release
+```
+
+Set `media_dir` in `microdlna.conf` to the folder holding your media, then install
+and start the service:
+
+```sh
+sudo ./install.sh
+systemctl status microdlna
+```
+
+The service runs as the user `pi`. If that user does not exist on your machine,
+edit `microdlna.service` before installing. See [Installation](docs/INSTALLATION.md)
+for the details.
+
+## Configuration
+
+The installed configuration file is `/usr/local/etc/microdlna.conf`. The most
+useful settings:
+
+| Setting | Purpose | Default |
+|---|---|---|
+| `media_dir` | Folder to publish (required) | none |
+| `friendly_name` | Name shown on your TV | host name |
+| `network_interface` | Interfaces to use, e.g. `eth0,wlan0` | all but loopback |
+| `port` | HTTP port | `2800` |
+
+Restart the service after a change:
+
+```sh
+sudo systemctl restart microdlna
+```
+
+All options are described in [Configuration](docs/CONFIGURATION.md).
+
+## Tested with
+
+- A TV, over DLNA
+- VLC
 
 ## Why this fork
 
@@ -18,136 +78,67 @@ TV over DLNA, and to fix blocking issues I ran into with the forked version.
 
 It has been a success: it now runs reliably on my Raspberry Pi and works well.
 
-## Modifications
+Among the improvements:
 
-Bug fixes, security and reliability:
+- Files larger than 2 GB are sent correctly.
+- Stopping the service no longer waits for the next network announcement.
+- Long discovery requests are answered instead of being silently dropped.
+- Playback links work when the port is 10000 or higher.
+- Stricter checks on incoming HTTP requests.
 
-- Network reliability at startup: retry with backoff while no network
-  interface is detected yet, instead of failing immediately (useful when
-  booting on a Raspberry Pi where the network isn't up yet).
-- HTTP security: fixed the `Host` header check (anti DNS-rebinding), which
-  could match on a prefix instead of comparing the exact value.
-- HTTP security: explicit, bounds-checked (`PATH_MAX`) construction of the
-  full served file path before `stat()`, and removal of a redundant double
-  URL-unescape.
-- Major fix for sending large files (`sendfile.c`): switched to `off_t`
-  (instead of `size_t`) to correctly handle files larger than 2GB, always
-  fall back to read/write on any `sendfile()` error, and guard against an
-  infinite loop if `sendfile()` returns 0.
-- Removed a problematic `setpriority()` call.
-- `mime.c`: fixed an out-of-bounds read before the start of the filename
-  for any name shorter than 6 characters with no extension.
-- `getifaddr.c`: fixed an out-of-bounds read past the end of the string in
-  `validate_uuid()` for any input shorter than a full UUID (`--uuid`).
-- `dirlist.c`: fixed `get_directory_listing()` returning `NULL` (treated as
-  an error, so no HTTP response was sent) for a valid but empty Browse
-  result, e.g. a `StartingIndex` past the total item count.
+The full list is in the [Changelog](CHANGELOG.md).
 
-Other topics:
+## Development
 
-- Build adjustments (debug/release modes).
-- Reworked config file (`microdlna.conf`), notably for Raspberry Pi media
-  paths.
-- Added `install.sh`/`uninstall.sh` scripts and the systemd unit.
-- Added icon choice: import a custom image and select it at build time
-  (`make ICON=<name>`), see `docs/Icons.md`.
-- Added a unit test suite (`make check`) and a CI workflow, see `## Tests`
-  below.
+```sh
+make                # development build, in build/
+make check          # unit tests
+make check-functional
+make check-functional-tsan
+```
 
-### Test suite hardening (unit, functional, ThreadSanitizer)
+- **Unit tests** (`make check`, alias `make test`) link individual modules
+  directly, with no process and no sockets, under AddressSanitizer,
+  UndefinedBehaviorSanitizer and LeakSanitizer.
+- **Functional tests** (`make check-functional`) start the real server and talk to
+  it over HTTP/SOAP and SSDP on the loopback interface, under AddressSanitizer
+  and UndefinedBehaviorSanitizer.
+- **`make check-functional-tsan`** runs the functional tests under
+  ThreadSanitizer to catch data races.
 
-Added a broad set of unit and functional tests to make deep refactoring
-safe, and fixed every production bug they turned up:
+The tests do not affect the `microdlnad` binary built by `make`, and they never
+exercise the real daemon mode (fork, setsid, setuid).
 
-- GENA eventing (`upnpevents.c`) was effectively unusable: the response to
-  `SUBSCRIBE` never actually carried the `SID`/`Timeout` headers, so a
-  client could never renew or unsubscribe, and subscribing to an unknown
-  event URL returned `200` instead of an error.
-- Out-of-bounds reads on event subscriber SIDs: a `memcmp` compared a fixed
-  41 bytes against a client-supplied SID that could be shorter, and a
-  `Callback` header with no path was read past its end.
-- `minissdp.c`: M-SEARCH requests over ~199 bytes (common with a long
-  `USER-AGENT`) were silently truncated and dropped instead of answered;
-  the receive buffer was enlarged and the overflow check made reachable.
-- `upnpsoap.c`: the listening port was truncated to 4 digits when building
-  `<res>` URLs in Browse results, making every file unreachable once the
-  port reached 10000+.
-- `upnphttp.c`: the `transferMode.dlna.org: Interactive` check was
-  inverted, rejecting images and accepting videos instead of the reverse.
-- `microdlna.c`: `SIGTERM`/`SIGINT` could be ignored for up to
-  `notify_interval` (895s by default) if the signal arrived just before
-  `select()`, and the `SIGHUP` handler called non-async-signal-safe code
-  (logging, `malloc`, sockets) directly from signal context. Fixed with a
-  self-pipe: handlers only set a flag and wake the main loop, which does
-  the actual shutdown/reload.
-- `microdlna.c`/`threads.c`: a use-after-free at shutdown, where
-  `media_dir` and the interface table could be freed while a detached
-  `serve_file()` thread was still reading them (caught by
-  ThreadSanitizer). Shutdown now waits briefly for in-flight transfers to
-  finish before freeing them.
+To run one functional test binary, filtered by test name, after
+`make check-functional`:
 
-## Compile 
+```sh
+MICRODLNAD_BIN=build/tests/functional/sanitized/microdlnad \
+  build/tests/functional/bin/ftest_events renew
+```
 
-    make
+CI runs the development build, the release build and the three test suites on
+every push and pull request.
 
-### Compile Release
+## Documentation
 
-Compile with more optimisations and stripping
+| Page | Content |
+|---|---|
+| [Installation](docs/INSTALLATION.md) | Build, service, update, uninstall |
+| [Configuration](docs/CONFIGURATION.md) | Every option and the config file syntax |
+| [Troubleshooting](docs/TROUBLESHOOTING.md) | Server not found, empty folders, logs |
+| [Icons](docs/Icons.md) | Using your own device icon |
+| [Changelog](CHANGELOG.md) | What changed in each version |
 
-    make BUILD=release
+## Credits
 
-## Tests
+MicroDLNA is a fork of [microdlna](https://github.com/mjfwalsh/microdlna) by
+Michael J. Walsh, itself a fork of MiniDLNA, and it includes code from the
+MiniUPnP project. Many thanks to Michael J. Walsh, whose project saved me a lot
+of work.
 
-There are two independent kinds of tests, plus a ThreadSanitizer variant of
-the second kind. None of them affect the `microdlnad` binary built by
-`make`, and the real daemon mode (fork/setsid/setuid) is never exercised.
+## License
 
-### Unit tests
-
-Link individual `.c` modules directly (no process spawned, no sockets), with
-AddressSanitizer/UndefinedBehaviorSanitizer/LeakSanitizer always on:
-
-    make check
-
-`make check` (alias: `make test`) compiles and runs every test under
-`tests/`.
-
-### Functional tests
-
-Spawn the real `microdlnad` binary as a separate process and talk to it over
-real sockets (HTTP/SOAP over TCP, SSDP over UDP on the loopback interface),
-under AddressSanitizer/UndefinedBehaviorSanitizer:
-
-    make check-functional
-
-Run the same functional test suite against a build compiled with
-ThreadSanitizer instead, to catch data races under real concurrent traffic:
-
-    make check-functional-tsan
-
-To debug a single functional test binary, or filter by test name:
-
-    MICRODLNAD_BIN=build/tests/functional/sanitized/microdlnad \
-      build/tests/functional/bin/ftest_events renew
-
-CI (`.github/workflows/ci.yml`) runs the dev build, the release build, and
-all three test suites (unit, functional, functional ThreadSanitizer) as
-separate jobs on every push and pull request.
-
-See `docs/dev/TESTS.md` and `docs/dev/FUNCTIONAL_TESTS.md` for how the tests
-are organized and how to add one.
-
-## Installation
-
-Install systemd service (cf config file in /usr/local/etc/microdlna.conf)
-
-    ./install.sh
-
-
-Uninstall systemd service
-
-    ./uninstall.sh
-
-## Thanks
-
-Many thanks to Michael J Walsh for his projet https://github.com/mjfwalsh/microdlna which avoid me a lot of work
+GNU General Public License version 2, see [COPYING](COPYING). The licenses of the
+original projects are in [LICENCE.minidlna](LICENCE.minidlna) and
+[LICENCE.miniupnpd](LICENCE.miniupnpd).
