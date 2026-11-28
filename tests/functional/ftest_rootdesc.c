@@ -46,7 +46,7 @@ TEST(description_endpoints_return_200_chunked)
     get_and_check(port, "/ConnectionMgr.xml", "ConnectionManager");
     get_and_check(port, "/X_MS_MediaReceiverRegistrar.xml", NULL);
 
-    mdlna_stop(&proc);
+    ASSERT_TRUE(mdlna_stop(&proc));
 }
 
 TEST(unknown_path_returns_404)
@@ -73,5 +73,5 @@ TEST(unknown_path_returns_404)
         tests_fail(__FILE__, __LINE__, "request failed");
     }
 
-    mdlna_stop(&proc);
+    ASSERT_TRUE(mdlna_stop(&proc));
 }

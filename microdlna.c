@@ -95,7 +95,12 @@ char uuidvalue[UUID_LEN] = { '\0' };
 
 // var local to this file
 static uid_t uid = (uid_t)-1;
-static volatile int quitting = 0;
+static volatile sig_atomic_t quitting = 0;
+static volatile sig_atomic_t reload_requested = 0;
+static volatile sig_atomic_t received_signal = 0;
+/* self-pipe: signal handlers write a byte so select() always wakes up,
+ * even when the signal lands just before the main loop enters it */
+static int signal_pipe[2] = { -1, -1 };
 static int foreground_execution = 0;
 static int shttpl = -1;
 static int sssdp = -1;
@@ -174,20 +179,40 @@ static int open_and_conf_http_socket(int port)
     return s;
 }
 
-/* Handler for the SIGTERM signal (kill)
- * SIGINT is also handled */
+/* Signal handlers only set a flag and wake the main loop: everything else
+ * (logging, reloading interfaces) is async-signal-unsafe and is done by the
+ * main loop itself. */
+static void wake_main_loop(void)
+{
+    int saved_errno = errno;
+    char c = 0;
+    if (write(signal_pipe[1], &c, 1) < 0)
+    {
+        /* pipe full: a wake-up is already pending */
+    }
+    errno = saved_errno;
+}
+
+/* SIGTERM and SIGINT */
 static void sigterm(int sig)
 {
-    signal(sig, SIG_IGN);       /* Ignore this signal while we are quitting */
-    PRINT_LOG(E_DEBUG, "received signal %d, good-bye\n", sig);
+    received_signal = sig;
     quitting = 1;
+    wake_main_loop();
 }
 
 static void sighup(int sig)
 {
-    signal(sig, sighup);
-    PRINT_LOG(E_DEBUG, "received signal %d, re-read\n", sig);
-    reload_ifaces(1, sssdp);
+    (void)sig;
+    reload_requested = 1;
+    wake_main_loop();
+}
+
+static void drain_signal_pipe(void)
+{
+    char buf[64];
+    while (read(signal_pipe[0], buf, sizeof(buf)) > 0)
+        ;
 }
 
 static void help(const char *arg0)
@@ -448,6 +473,9 @@ static void set_signal_handlers(void)
     /* set signal handlers */
     struct sigaction sa;
 
+    if (pipe2(signal_pipe, O_NONBLOCK | O_CLOEXEC) != 0)
+        EXIT_ERROR("Failed to create the signal pipe: %d\n", errno);
+
     memset(&sa, 0, sizeof(struct sigaction));
 
     sa.sa_handler = sigterm;
@@ -457,7 +485,8 @@ static void set_signal_handlers(void)
         sig_error("SIGINT");
     if (signal(SIGPIPE, SIG_IGN) == SIG_ERR)
         sig_error("SIGPIPE");
-    if (signal(SIGHUP, &sighup) == SIG_ERR)
+    sa.sa_handler = sighup;
+    if (sigaction(SIGHUP, &sa, NULL))
         sig_error("SIGHUP");
 }
 
@@ -661,20 +690,35 @@ int main(int argc, char *const *argv)
             max_fd = MAX(max_fd, shttpl);
         }
 
+        FD_SET(signal_pipe[0], &readset);
+        max_fd = MAX(max_fd, signal_pipe[0]);
+
         fd_set writeset;
         FD_ZERO(&writeset);
         upnpevents_selectfds(&readset, &writeset, &max_fd);
 
         int ret = select(max_fd + 1, &readset, &writeset, 0, &timeout);
-        if (ret < 0)
+        if (ret < 0 && errno != EINTR)
         {
-            if (quitting)
-                goto shutdown;
-            if (errno == EINTR)
-                continue;
             PRINT_LOG(E_ERROR, "select(all): %d\n", errno);
             EXIT_ERROR("Failed to select open sockets. EXITING\n");
         }
+        if (ret > 0 && FD_ISSET(signal_pipe[0], &readset))
+            drain_signal_pipe();
+
+        if (quitting)
+        {
+            PRINT_LOG(E_DEBUG, "received signal %d, good-bye\n", (int)received_signal);
+            goto shutdown;
+        }
+        if (reload_requested)
+        {
+            reload_requested = 0;
+            PRINT_LOG(E_DEBUG, "received SIGHUP, re-reading network interfaces\n");
+            reload_ifaces(1, sssdp);
+        }
+        if (ret < 0)
+            continue;   /* EINTR: readset/writeset are undefined */
         upnpevents_processfds(&readset, &writeset);
         upnpevents_removed_timedout_subs();
 
@@ -724,21 +768,34 @@ int main(int argc, char *const *argv)
     }
 
 shutdown:
+    ;
+    /* serve_file() threads read media_dir and the interface table: only
+     * free them once no transfer is running (a stalled client must not
+     * delay the exit for long, though) */
+    int busy_threads = wait_for_threads(1);
 
     send_all_ssdp_goodbyes();
     clear_upnpevent_subscribers();
     upnpevents_clear_notify_list();
-    free_ifaces();
 
     if (sssdp >= 0)
         close(sssdp);
     if (shttpl >= 0)
         close(shttpl);
+    close(signal_pipe[0]);
+    close(signal_pipe[1]);
 
     if (pidfilename && unlink(pidfilename) < 0)
         PRINT_LOG(E_ERROR, "Failed to remove pidfile %s: %d\n", pidfilename, errno);
 
-    free(media_dir);
+    if (busy_threads == 0)
+    {
+        free_ifaces();
+        free(media_dir);
+    }
+    else
+        PRINT_LOG(E_INFO, "%d transfer(s) still running, not waiting for them\n",
+                  busy_threads);
     free(pidfilename);
 
     PRINT_LOG(E_INFO, "exiting program\n");

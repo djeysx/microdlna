@@ -172,7 +172,7 @@ static int renew_upnpevent_subscriber(const char *sid, int timeout)
 {
     for (struct subscriber * sub = subscriberlist; sub != NULL; sub = sub->next)
     {
-        if (memcmp(sid, sub->uuid, 41) == 0)
+        if (strcmp(sid, sub->uuid) == 0)
         {
             sub->timeout = (timeout ? time(NULL) + timeout : 0);
             return 0;
@@ -193,7 +193,7 @@ static int remove_upnpevent_subscriber(const char *sid)
 
     while (sub != NULL)
     {
-        if (memcmp(sid, sub->uuid, 41) == 0)
+        if (strcmp(sid, sub->uuid) == 0)
         {
             if (sub->notify)
             {
@@ -278,7 +278,7 @@ static void upnp_event_notify_connect(struct upnp_event_notify *obj)
     unsigned int i = 0;
     const char *p = obj->sub->callback;
     p += 7;                     /* http:// */
-    while (*p != '/' && *p != ':' && i < (sizeof(obj->addrstr) - 1))
+    while (*p != '/' && *p != ':' && *p != '\0' && i < (sizeof(obj->addrstr) - 1))
         obj->addrstr[i++] = *(p++);
     obj->addrstr[i] = '\0';
 
@@ -603,14 +603,15 @@ void process_http_subscribe_upnphttp(struct upnphttp *h)
          * - Send the initial event message */
         /* Server:, SID:; Timeout: Second-(xx|infinite) */
         sid = add_upnpevent_subscriber(h->path, h->req_callback, h->req_timeout);
-        h->respflags = FLAG_TIMEOUT;
-        if (sid)
+        if (!sid)
         {
-            PRINT_LOG(E_DEBUG, "generated sid=%s\n", sid);
-            h->respflags |= FLAG_SID;
-            free(h->req_sid);
-            h->req_sid = safe_strdup(sid);
+            send_http_response(h, HTTP_PRECONDITION_FAILED_412);
+            break;
         }
+        PRINT_LOG(E_DEBUG, "generated sid=%s\n", sid);
+        h->respflags = FLAG_TIMEOUT | FLAG_SID;
+        free(h->req_sid);
+        h->req_sid = safe_strdup(sid);
         send_http_response(h, HTTP_OK_200);
         break;
 

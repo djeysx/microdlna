@@ -33,3 +33,7 @@ void decrement_thread_count(void);
 int create_thread(void *(*start_routine)(void *), void *arg);
 
 void init_threads(void);
+
+/* Waits up to timeout_s seconds for every thread started by create_thread()
+ * to finish; returns how many are still running. */
+int wait_for_threads(int timeout_s);

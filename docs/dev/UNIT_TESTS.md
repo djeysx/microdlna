@@ -119,14 +119,33 @@ existant (`stream.h`, `log.h`). Aucune installation requise.
    d'ajouter un cas de test sur ce genre de fonction avec une entrée
    courte/vide, valider son comportement avec un petit programme autonome
    compilé en `-fsanitize=address` plutôt que de le découvrir via
-   `make check`. Trois cas réels de ce type ont été trouvés et corrigés en
-   écrivant cette suite (voir section suivante) ; c'est le genre de défaut
-   à surveiller en en ajoutant d'autres.
+   `make check`. Plusieurs cas réels de ce type ont été trouvés et corrigés
+   en écrivant cette suite (voir section suivante) ; c'est le genre de
+   défaut à surveiller en en ajoutant d'autres.
+
+6. **État global `static` des modules.** `upnpevents.c` garde ses listes
+   d'abonnés et de notifications dans des globales de fichier : chaque test
+   de `test_upnpevents.c` se termine par `reset_lists()`
+   (`clear_upnpevent_subscribers()` + `upnpevents_clear_notify_list()`).
+   `threads.c` initialise un mutex : `test_threads.c` n'appelle
+   `init_threads()` qu'une fois par processus (`setup()`).
+   `mediadir.c` ne résout `media_dir` qu'une fois par processus : tout son
+   cycle de vie tient dans un seul `TEST()` séquentiel.
+
+7. **`test_minissdp.c` utilise de vraies sockets UDP sur 127.0.0.1.**
+   `process_ssdp_request()` lit un datagramme sur la socket qu'on lui
+   passe : le test envoie depuis une socket « cliente » vers une socket
+   « serveur » bindée sur `127.0.0.1:0` (avec `IP_PKTINFO`), appelle la
+   fonction, puis lit la réponse unicast. Les tests de format NOTIFY
+   alive/byebye rejoignent le groupe `239.255.255.250` sur `lo` (port 1900,
+   `SO_REUSEADDR`) et ignorent les autres annonces SSDP de la machine ; ils
+   affichent « skipped » si ce bind est impossible.
 
 ## Défauts de production corrigés en écrivant ces tests
 
-Trois défauts réels, confirmés avec AddressSanitizer sur un programme
-autonome avant d'être corrigés dans le code de production :
+Défauts réels, chacun prouvé par un test qui échouait sur le code d'avant
+(les lectures hors bornes ont d'abord été confirmées avec AddressSanitizer
+sur un programme autonome) :
 
 - **`get_mime_type()` (`mime.c`) lisait jusqu'à 6 octets avant le début de
   la chaîne** pour tout nom de fichier de moins de 6 caractères sans point
@@ -157,3 +176,41 @@ autonome avant d'être corrigés dans le code de production :
   `starting_index_past_the_end_returns_nothing` et
   `requested_count_zero_returns_an_empty_but_valid_result` dans
   `test_dirlist.c`.
+
+- **Renouvellement/désabonnement GENA : `memcmp(sid, sub->uuid, 41)`
+  (`upnpevents.c`)** lisait toujours 41 octets du SID envoyé par le client,
+  quelle que soit sa longueur — lecture hors bornes sur le tas pour tout
+  SID plus court (en-tête `SID:` d'une requête SUBSCRIBE/UNSUBSCRIBE).
+  Corrigé par un `strcmp()` (le SID stocké est NUL-terminé). Testé par
+  `short_sid_is_rejected_without_reading_past_its_end`.
+
+- **La réponse à un SUBSCRIBE ne contenait jamais l'en-tête `SID`**
+  (ni `Timeout`) : `send_http_response_helper()` (`upnphttp.c`) écrasait
+  `h->respflags` avec `FLAG_HTML`, effaçant les `FLAG_SID | FLAG_TIMEOUT`
+  posés par le handler. Un control point ne pouvait donc ni renouveler ni
+  se désabonner. Corrigé (`|=`). Testé par
+  `subscribe_response_carries_sid_and_timeout_headers` et
+  `renew_response_enforces_dlna_five_minute_timeout`.
+
+- **SUBSCRIBE sur une URL d'événement inconnue répondait 200** (sans SID,
+  sans rien abonner). Répond désormais 412. Testé par
+  `subscribe_to_unknown_event_url_is_rejected`.
+
+- **Callback GENA sans chemin (`http://127.0.0.1`)** :
+  `upnp_event_notify_connect()` (`upnpevents.c`) copiait l'hôte sans
+  s'arrêter sur `'\0'`, lisant au-delà de la chaîne et laissant le chemin
+  du NOTIFY pointer hors limites. Testé par
+  `notify_callback_without_port_or_path`.
+
+- **M-SEARCH de plus de 199 octets ignorés** (`minissdp.c`) : le datagramme
+  était lu dans un buffer de 200 octets et tronqué silencieusement (la
+  vérification « exceeded buffer » ne pouvait jamais se déclencher), si
+  bien qu'un `ST:` placé après un long `USER-AGENT` — cas courant chez les
+  vrais clients — était perdu et la recherche restait sans réponse. Buffer
+  porté à 1500 octets, et un datagramme qui le remplit est désormais rejeté
+  comme potentiellement tronqué. Testé par
+  `msearch_longer_than_200_bytes_is_still_answered` et
+  `msearch_filling_the_whole_buffer_is_rejected_as_possibly_truncated`.
+
+D'autres défauts, visibles seulement sur le binaire réel, ont été trouvés
+par les tests fonctionnels : voir [FUNCTIONAL_TESTS.md](FUNCTIONAL_TESTS.md).

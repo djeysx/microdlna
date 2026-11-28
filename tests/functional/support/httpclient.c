@@ -193,6 +193,15 @@ int http_do_request(int port, const char *request, size_t request_len,
         sent += (size_t)n;
     }
 
+    int rc = http_read_message(fd, 0, out);
+    close(fd);
+    return rc;
+}
+
+int http_read_message(int fd, int is_request, struct http_response *out)
+{
+    memset(out, 0, sizeof(*out));
+
     unsigned char *buf = NULL;
     size_t len = 0, cap = 0;
     ssize_t header_end;
@@ -205,7 +214,6 @@ int http_do_request(int port, const char *request, size_t request_len,
         if (recv_more(fd, &buf, &len, &cap) <= 0)
         {
             free(buf);
-            close(fd);
             return -1;
         }
     }
@@ -239,7 +247,6 @@ int http_do_request(int port, const char *request, size_t request_len,
         if (decode_chunked_body(fd, &buf, &len, &cap, body_start, &body, &body_len) != 0)
         {
             free(buf);
-            close(fd);
             http_response_free(out);
             return -1;
         }
@@ -265,9 +272,12 @@ int http_do_request(int port, const char *request, size_t request_len,
     }
     else
     {
-        for (;;)
-            if (recv_more(fd, &buf, &len, &cap) <= 0)
-                break;
+        /* a request without framing has no body; a response without
+         * framing runs until the server closes the connection */
+        if (!is_request)
+            for (;;)
+                if (recv_more(fd, &buf, &len, &cap) <= 0)
+                    break;
 
         size_t take = len - body_start;
         out->body = malloc(take + 1);
@@ -279,7 +289,6 @@ int http_do_request(int port, const char *request, size_t request_len,
     }
 
     free(buf);
-    close(fd);
     return 0;
 }
 

@@ -35,6 +35,14 @@ int http_do_request(int port, const char *request, size_t request_len,
 
 void http_response_free(struct http_response *r);
 
+/* Reads one complete HTTP message (start line + headers + body) from an
+ * open fd into *out: the body is bounded by Content-Length, de-chunked, or
+ * -- for a response only -- read until EOF. With is_request set, a message
+ * without framing has an empty body (the peer is waiting for our reply,
+ * not closing). For a request, out->status is 0 and out->headers starts
+ * with the request line. Returns 0, or -1 on error (out zeroed). */
+int http_read_message(int fd, int is_request, struct http_response *out);
+
 /* Reads just the status line + header block from an already-open
  * connection on which a request was already sent, deliberately leaving
  * the body (if any) undrained in the socket. Used by tests that need to

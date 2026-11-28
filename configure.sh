@@ -201,6 +201,28 @@ ${tab}  done; \\
 ${tab}  if [ \$\$fail -ne 0 ]; then echo 'FUNCTIONAL TESTS FAILED'; exit 1; fi; \\
 ${tab}  echo 'ALL FUNCTIONAL TESTS PASSED'
 
+# check-functional-tsan: same suite, against a ThreadSanitizer build of
+# microdlnad (ASan and TSan cannot be combined, hence a third build
+# directory). halt_on_error makes the server abort on the first data race,
+# so the test talking to it fails -- every test asserts a clean
+# mdlna_stop(). The client binaries stay ASan-instrumented: they are
+# separate processes.
+FTEST_TSAN_BIN_DIR := \$(BUILD_DIR)/tests/functional/tsan
+FTEST_TSAN := -fsanitize=thread -fno-omit-frame-pointer
+
+.PHONY: check-functional-tsan
+check-functional-tsan: \$(FTEST_BINS)
+${tab}\$(MAKE) BUILD_DIR=\$(FTEST_TSAN_BIN_DIR) \\
+${tab}  CFLAGS_DEV="\$(CFLAGS_DEV) \$(FTEST_TSAN)" LDFLAGS_DEV="\$(LDFLAGS_DEV) \$(FTEST_TSAN)" \\
+${tab}  \$(FTEST_TSAN_BIN_DIR)/microdlnad
+${tab}@fail=0; for t in \$(FTEST_BINS); do \\
+${tab}    printf '== %s\\n' "\$\$t"; \\
+${tab}    TSAN_OPTIONS="halt_on_error=1 exitcode=66" \\
+${tab}      MICRODLNAD_BIN=\$(FTEST_TSAN_BIN_DIR)/microdlnad "\$\$t" || fail=1; \\
+${tab}  done; \\
+${tab}  if [ \$\$fail -ne 0 ]; then echo 'FUNCTIONAL TESTS (TSAN) FAILED'; exit 1; fi; \\
+${tab}  echo 'ALL FUNCTIONAL TESTS (TSAN) PASSED'
+
 -include \$(wildcard \$(FTEST_OBJ_DIR)/*.d)
 
 MAKEFILE

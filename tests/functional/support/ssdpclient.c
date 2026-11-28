@@ -8,7 +8,7 @@
 
 #include "ssdpclient.h"
 
-int ssdp_msearch(int timeout_ms, char *reply_buf, size_t reply_cap)
+int ssdp_msearch(const char *st, int timeout_ms, char *reply_buf, size_t reply_cap)
 {
     int s = socket(AF_INET, SOCK_DGRAM, 0);
     if (s < 0)
@@ -28,40 +28,47 @@ int ssdp_msearch(int timeout_ms, char *reply_buf, size_t reply_cap)
     dest.sin_port = htons(1900);
     dest.sin_addr.s_addr = inet_addr("239.255.255.250");
 
-    static const char msearch[] =
-        "M-SEARCH * HTTP/1.1\r\n"
-        "HOST: 239.255.255.250:1900\r\n"
-        "MAN: \"ssdp:discover\"\r\n"
-        "MX: 1\r\n"
-        "ST: ssdp:all\r\n"
-        "\r\n";
+    char msearch[512];
+    int len = snprintf(msearch, sizeof(msearch),
+                       "M-SEARCH * HTTP/1.1\r\n"
+                       "HOST: 239.255.255.250:1900\r\n"
+                       "MAN: \"ssdp:discover\"\r\n"
+                       "MX: 1\r\n"
+                       "ST: %s\r\n"
+                       "\r\n", st);
 
-    if (sendto(s, msearch, sizeof(msearch) - 1, 0,
+    if (sendto(s, msearch, (size_t)len, 0,
                (struct sockaddr *)&dest, sizeof(dest)) < 0)
     {
         close(s);
         return -1;
     }
 
-    fd_set rfds;
-    FD_ZERO(&rfds);
-    FD_SET(s, &rfds);
-    struct timeval tv;
-    tv.tv_sec = timeout_ms / 1000;
-    tv.tv_usec = (timeout_ms % 1000) * 1000;
-
-    int rc = select(s + 1, &rfds, NULL, NULL, &tv);
-    if (rc <= 0)
+    int count = 0;
+    size_t used = 0;
+    reply_buf[0] = '\0';
+    for (;;)
     {
-        close(s);
-        return -1;
+        fd_set rfds;
+        FD_ZERO(&rfds);
+        FD_SET(s, &rfds);
+        struct timeval tv;
+        tv.tv_sec = timeout_ms / 1000;
+        tv.tv_usec = (timeout_ms % 1000) * 1000;
+
+        if (select(s + 1, &rfds, NULL, NULL, &tv) <= 0)
+            break;
+
+        ssize_t n = recv(s, reply_buf + used, reply_cap - used - 1, 0);
+        if (n <= 0)
+            break;
+        used += (size_t)n;
+        reply_buf[used] = '\0';
+        count++;
+        if (used + 1 >= reply_cap)
+            break;
     }
 
-    ssize_t n = recv(s, reply_buf, reply_cap - 1, 0);
     close(s);
-    if (n < 0)
-        return -1;
-
-    reply_buf[n] = '\0';
-    return (int)n;
+    return count;
 }

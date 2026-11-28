@@ -294,7 +294,7 @@ static void parse_http_header(struct upnphttp *h, char *name, char *value, int l
 
 static void send_http_response_helper(struct upnphttp *h, int code, const char *msg)
 {
-    h->respflags = FLAG_HTML;
+    h->respflags |= FLAG_HTML;
     send_http_headers(h, code, msg);
     if (h->req_command != EHead)
     {
@@ -786,7 +786,7 @@ static void *serve_file(void *param)
             send_http_response(h, HTTP_BAD_REQUEST_400);
             goto error;
         }
-        if (mime->type == M_IMAGE)
+        if (mime->type != M_IMAGE)
         {
             PRINT_LOG(E_DEBUG,
                       "Client tried to specify transferMode as Interactive without an image!\n");

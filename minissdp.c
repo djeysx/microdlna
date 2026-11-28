@@ -308,7 +308,9 @@ void send_ssdp_notifies(int s, const char *host)
  * process SSDP M-SEARCH requests and responds to them */
 void process_ssdp_request(int sssdp)
 {
-    char bufr[200];
+    /* room for a full-MTU datagram: real M-SEARCHes routinely exceed 200
+     * bytes once USER-AGENT and similar headers are included */
+    char bufr[1500];
     struct sockaddr_in sendername;
     int mx_val = -1;
     char *st = NULL, *mx = NULL, *man = NULL;
@@ -341,7 +343,8 @@ void process_ssdp_request(int sssdp)
         PRINT_LOG(E_ERROR, "recvfrom(udp): %d\n", errno);
         return;
     }
-    if (n >= sizeof(bufr))
+    /* a datagram filling the whole read window may have been truncated */
+    if (n >= (int)sizeof(bufr) - 1)
     {
         PRINT_LOG(E_ERROR, "recvfrom(udp): exceeded buffer\n");
         return;

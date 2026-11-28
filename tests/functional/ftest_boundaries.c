@@ -80,7 +80,7 @@ TEST(browse_requested_count_negative_is_clamped_to_all_like_zero)
 
     check_200_with_both_files(port, "-1");
 
-    mdlna_stop(&proc);
+    ASSERT_TRUE(mdlna_stop(&proc));
 }
 
 TEST(browse_requested_count_larger_than_directory_is_clamped_not_overrun)
@@ -98,7 +98,7 @@ TEST(browse_requested_count_larger_than_directory_is_clamped_not_overrun)
 
     check_200_with_both_files(port, "999999999");
 
-    mdlna_stop(&proc);
+    ASSERT_TRUE(mdlna_stop(&proc));
 }
 
 TEST(browse_path_traversal_object_id_is_rejected)
@@ -118,13 +118,13 @@ TEST(browse_path_traversal_object_id_is_rejected)
     if (http_do_request(port, req, req_len, &resp) != 0)
     {
         tests_fail(__FILE__, __LINE__, "request failed");
-        mdlna_stop(&proc);
+        ASSERT_TRUE(mdlna_stop(&proc));
         return;
     }
 
     ASSERT_INT_EQ(resp.status, 403);
     http_response_free(&resp);
-    mdlna_stop(&proc);
+    ASSERT_TRUE(mdlna_stop(&proc));
 }
 
 TEST(browse_with_negative_content_length_is_rejected_cleanly)
@@ -153,13 +153,13 @@ TEST(browse_with_negative_content_length_is_rejected_cleanly)
     if (http_do_request(port, req, strlen(req), &resp) != 0)
     {
         tests_fail(__FILE__, __LINE__, "request failed");
-        mdlna_stop(&proc);
+        ASSERT_TRUE(mdlna_stop(&proc));
         return;
     }
 
     ASSERT_INT_EQ(resp.status, 402);
     http_response_free(&resp);
-    mdlna_stop(&proc);
+    ASSERT_TRUE(mdlna_stop(&proc));
 }
 
 TEST(oversized_request_line_closes_connection_without_crashing_server)
@@ -200,7 +200,7 @@ TEST(oversized_request_line_closes_connection_without_crashing_server)
         tests_fail(__FILE__, __LINE__, "server did not survive the oversized request line");
     }
 
-    mdlna_stop(&proc);
+    ASSERT_TRUE(mdlna_stop(&proc));
 }
 
 TEST(invalid_cli_port_exits_immediately_without_listening)
@@ -232,11 +232,11 @@ TEST(missing_media_dir_starts_fine_but_browse_returns_503)
     if (http_do_request(port, req, req_len, &resp) != 0)
     {
         tests_fail(__FILE__, __LINE__, "request failed");
-        mdlna_stop(&proc);
+        ASSERT_TRUE(mdlna_stop(&proc));
         return;
     }
 
     ASSERT_INT_EQ(resp.status, 503);
     http_response_free(&resp);
-    mdlna_stop(&proc);
+    ASSERT_TRUE(mdlna_stop(&proc));
 }

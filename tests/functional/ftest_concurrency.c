@@ -103,7 +103,7 @@ TEST(max_connections_limit_returns_500_once_saturated_then_recovers)
     ASSERT_TRUE(recovered);
 
     close(fd_b);
-    mdlna_stop(&proc);
+    ASSERT_TRUE(mdlna_stop(&proc));
 }
 
 #define NUM_CLIENT_THREADS 4

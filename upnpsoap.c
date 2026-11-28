@@ -340,7 +340,7 @@ static void print_xml_directory_listing(struct upnphttp *h,
     if (listening_port == 80)
         listening_port_str[0] = '\0';
     else
-        snprintf(listening_port_str, 6, ":%d", listening_port);
+        snprintf(listening_port_str, sizeof(listening_port_str), ":%d", listening_port);
 
     const char *url_escaped_dirpath = url_escape(h->remote_dirpath);
     const char *xml_escaped_dirpath = xml_escape_double(h->remote_dirpath);

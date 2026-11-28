@@ -16,10 +16,10 @@
 
 #include <stddef.h>
 
-/* Sends an M-SEARCH (ST: ssdp:all) query to 239.255.255.250:1900, with
- * outgoing traffic forced over lo (IP_MULTICAST_IF set to 127.0.0.1,
- * mirroring what microdlnad's own notify socket does for its interface),
- * then waits up to timeout_ms for a unicast reply and copies it
- * (NUL-terminated) into reply_buf. Returns the reply length on success, or
- * -1 on timeout/error. */
-int ssdp_msearch(int timeout_ms, char *reply_buf, size_t reply_cap);
+/* Sends an M-SEARCH for `st` to 239.255.255.250:1900, with outgoing
+ * traffic forced over lo (IP_MULTICAST_IF set to 127.0.0.1, mirroring what
+ * microdlnad's own notify socket does for its interface), then collects
+ * every unicast reply until none arrives for timeout_ms. Replies are
+ * concatenated, NUL-terminated, into reply_buf. Returns the number of
+ * replies (0 on timeout), or -1 on a socket error. */
+int ssdp_msearch(const char *st, int timeout_ms, char *reply_buf, size_t reply_cap);

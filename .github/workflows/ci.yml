@@ -35,3 +35,18 @@ jobs:
         run: |
           ./configure.sh
           make check-functional
+
+  functional-tests-tsan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # recent runner kernels use more mmap randomisation bits than
+      # ThreadSanitizer supports, making it abort at startup
+      - name: Lower ASLR entropy for ThreadSanitizer
+        run: sudo sysctl vm.mmap_rnd_bits=28
+
+      - name: Functional tests (ThreadSanitizer)
+        run: |
+          ./configure.sh
+          make check-functional-tsan

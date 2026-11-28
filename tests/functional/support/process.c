@@ -63,6 +63,10 @@ static pid_t spawn(const char *bin, const char *media_dir, int port,
     argv[n++] = port_str;
     argv[n++] = "-D";
     argv[n++] = media_dir;
+    /* only serve (and accept connections) on lo, whatever real interfaces
+     * the machine has; an "-i" in extra_args comes later and wins */
+    argv[n++] = "-i";
+    argv[n++] = "lo";
     if (extra_args)
     {
         for (int i = 0; extra_args[i] != NULL; i++)
@@ -209,10 +213,15 @@ int mdlna_expect_fast_exit(const char *media_dir, int port,
 
 int mdlna_stop(struct mdlna_proc *p)
 {
+    return mdlna_stop_with(p, SIGTERM);
+}
+
+int mdlna_stop_with(struct mdlna_proc *p, int sig)
+{
     if (p->pid <= 0)
         return 0;
 
-    kill(p->pid, SIGTERM);
+    kill(p->pid, sig);
 
     struct timespec deadline;
     clock_gettime(CLOCK_MONOTONIC, &deadline);

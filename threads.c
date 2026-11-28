@@ -19,9 +19,11 @@
  * along with MicroDLNA. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 #include <pthread.h>
+#include <time.h>
 
 #include "threads.h"
 #include "globalvars.h"
@@ -30,12 +32,15 @@
 static int active_threads = 0;
 
 static pthread_mutex_t lock;
+static pthread_cond_t no_active_threads = PTHREAD_COND_INITIALIZER;
 static pthread_attr_t thread_attrs;
 
 void decrement_thread_count(void)
 {
     pthread_mutex_lock(&lock);
     active_threads--;
+    if (active_threads == 0)
+        pthread_cond_broadcast(&no_active_threads);
     PRINT_LOG(E_DEBUG, "ending thread: total threads: %d\n", active_threads);
     pthread_mutex_unlock(&lock);
 }
@@ -75,4 +80,22 @@ void init_threads(void)
     pthread_mutex_init(&lock, NULL);
     pthread_attr_init(&thread_attrs);
     pthread_attr_setdetachstate(&thread_attrs, PTHREAD_CREATE_DETACHED);
+}
+
+int wait_for_threads(int timeout_s)
+{
+    struct timespec deadline;
+    clock_gettime(CLOCK_REALTIME, &deadline);
+    deadline.tv_sec += timeout_s;
+
+    pthread_mutex_lock(&lock);
+    while (active_threads > 0)
+    {
+        if (pthread_cond_timedwait(&no_active_threads, &lock, &deadline) == ETIMEDOUT)
+            break;
+    }
+    int remaining = active_threads;
+    pthread_mutex_unlock(&lock);
+
+    return remaining;
 }

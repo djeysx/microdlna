@@ -54,6 +54,38 @@ Other topics:
 - Added a unit test suite (`make check`) and a CI workflow, see `## Tests`
   below.
 
+### Test suite hardening (unit, functional, ThreadSanitizer)
+
+Added a broad set of unit and functional tests to make deep refactoring
+safe, and fixed every production bug they turned up:
+
+- GENA eventing (`upnpevents.c`) was effectively unusable: the response to
+  `SUBSCRIBE` never actually carried the `SID`/`Timeout` headers, so a
+  client could never renew or unsubscribe, and subscribing to an unknown
+  event URL returned `200` instead of an error.
+- Out-of-bounds reads on event subscriber SIDs: a `memcmp` compared a fixed
+  41 bytes against a client-supplied SID that could be shorter, and a
+  `Callback` header with no path was read past its end.
+- `minissdp.c`: M-SEARCH requests over ~199 bytes (common with a long
+  `USER-AGENT`) were silently truncated and dropped instead of answered;
+  the receive buffer was enlarged and the overflow check made reachable.
+- `upnpsoap.c`: the listening port was truncated to 4 digits when building
+  `<res>` URLs in Browse results, making every file unreachable once the
+  port reached 10000+.
+- `upnphttp.c`: the `transferMode.dlna.org: Interactive` check was
+  inverted, rejecting images and accepting videos instead of the reverse.
+- `microdlna.c`: `SIGTERM`/`SIGINT` could be ignored for up to
+  `notify_interval` (895s by default) if the signal arrived just before
+  `select()`, and the `SIGHUP` handler called non-async-signal-safe code
+  (logging, `malloc`, sockets) directly from signal context. Fixed with a
+  self-pipe: handlers only set a flag and wake the main loop, which does
+  the actual shutdown/reload.
+- `microdlna.c`/`threads.c`: a use-after-free at shutdown, where
+  `media_dir` and the interface table could be freed while a detached
+  `serve_file()` thread was still reading them (caught by
+  ThreadSanitizer). Shutdown now waits briefly for in-flight transfers to
+  finish before freeing them.
+
 ## Compile 
 
     ./configure.sh
@@ -68,18 +100,46 @@ Compile with more optimisations and stripping
 
 ## Tests
 
-Unit tests, no external dependency required, with
+There are two independent kinds of tests, plus a ThreadSanitizer variant of
+the second kind. None of them affect the `microdlnad` binary built by
+`make`, and the real daemon mode (fork/setsid/setuid) is never exercised.
+
+### Unit tests
+
+Link individual `.c` modules directly (no process spawned, no sockets), with
 AddressSanitizer/UndefinedBehaviorSanitizer/LeakSanitizer always on:
 
     ./configure.sh
     make check
 
 `make check` (alias: `make test`) compiles and runs every test under
-`tests/`; it never affects the `microdlnad` binary built by `make`. CI
-(`.github/workflows/ci.yml`) runs it, plus the dev and release builds, on
-every push and pull request.
+`tests/`.
 
-See `docs/dev/TESTS.md` for how the tests are organized and how to add one.
+### Functional tests
+
+Spawn the real `microdlnad` binary as a separate process and talk to it over
+real sockets (HTTP/SOAP over TCP, SSDP over UDP on the loopback interface),
+under AddressSanitizer/UndefinedBehaviorSanitizer:
+
+    ./configure.sh
+    make check-functional
+
+Run the same functional test suite against a build compiled with
+ThreadSanitizer instead, to catch data races under real concurrent traffic:
+
+    make check-functional-tsan
+
+To debug a single functional test binary, or filter by test name:
+
+    MICRODLNAD_BIN=build/tests/functional/sanitized/microdlnad \
+      build/tests/functional/bin/ftest_events renew
+
+CI (`.github/workflows/ci.yml`) runs the dev build, the release build, and
+all three test suites (unit, functional, functional ThreadSanitizer) as
+separate jobs on every push and pull request.
+
+See `docs/dev/TESTS.md` and `docs/dev/FUNCTIONAL_TESTS.md` for how the tests
+are organized and how to add one.
 
 ## Installation
 

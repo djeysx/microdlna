@@ -46,7 +46,7 @@ TEST(file_serving_full_request_returns_exact_bytes)
     if (http_do_request(port, req, strlen(req), &resp) != 0)
     {
         tests_fail(__FILE__, __LINE__, "request failed");
-        mdlna_stop(&proc);
+        ASSERT_TRUE(mdlna_stop(&proc));
         return;
     }
 
@@ -59,7 +59,7 @@ TEST(file_serving_full_request_returns_exact_bytes)
     ASSERT_MEM_EQ(resp.body, expected, FILE_SIZE);
 
     http_response_free(&resp);
-    mdlna_stop(&proc);
+    ASSERT_TRUE(mdlna_stop(&proc));
 }
 
 TEST(file_serving_satisfiable_range_returns_206_with_exact_slice)
@@ -78,7 +78,7 @@ TEST(file_serving_satisfiable_range_returns_206_with_exact_slice)
     if (http_do_request(port, req, strlen(req), &resp) != 0)
     {
         tests_fail(__FILE__, __LINE__, "request failed");
-        mdlna_stop(&proc);
+        ASSERT_TRUE(mdlna_stop(&proc));
         return;
     }
 
@@ -95,7 +95,7 @@ TEST(file_serving_satisfiable_range_returns_206_with_exact_slice)
     ASSERT_MEM_EQ(resp.body, expected, 10);
 
     http_response_free(&resp);
-    mdlna_stop(&proc);
+    ASSERT_TRUE(mdlna_stop(&proc));
 }
 
 TEST(file_serving_range_start_after_end_returns_400)
@@ -114,13 +114,13 @@ TEST(file_serving_range_start_after_end_returns_400)
     if (http_do_request(port, req, strlen(req), &resp) != 0)
     {
         tests_fail(__FILE__, __LINE__, "request failed");
-        mdlna_stop(&proc);
+        ASSERT_TRUE(mdlna_stop(&proc));
         return;
     }
 
     ASSERT_INT_EQ(resp.status, 400);
     http_response_free(&resp);
-    mdlna_stop(&proc);
+    ASSERT_TRUE(mdlna_stop(&proc));
 }
 
 TEST(file_serving_range_beyond_end_of_file_returns_416)
@@ -142,11 +142,11 @@ TEST(file_serving_range_beyond_end_of_file_returns_416)
     if (http_do_request(port, req, strlen(req), &resp) != 0)
     {
         tests_fail(__FILE__, __LINE__, "request failed");
-        mdlna_stop(&proc);
+        ASSERT_TRUE(mdlna_stop(&proc));
         return;
     }
 
     ASSERT_INT_EQ(resp.status, 416);
     http_response_free(&resp);
-    mdlna_stop(&proc);
+    ASSERT_TRUE(mdlna_stop(&proc));
 }
